@@ -1,163 +1,54 @@
-# 🔐 Secure Share Web
+# Secure Note Sharing App (Web, E2EE)
 
-A cybersecurity-focused file sharing web application with **end-to-end encryption (E2EE)**, built with React and Firebase.
+An Web-based application for **secure note creation and sharing** using **End-to-End Encryption (E2EE)**. This project is developed as part of the *Computing Group Project (MAL2020)* to explore how strong cryptography can be combined with usability for real-world adoption.
 
-## ✨ Features
+## 🔐 Features
 
-- **End-to-End Encryption**: All files encrypted client-side using Web Crypto API (AES-GCM 256-bit)
-- **Secure Authentication**: Firebase Authentication with email/password and Google sign-in
-- **Encrypted File Storage**: Store encrypted files on Firebase Storage
-- **Secure Sharing**: Share files via QR code or encrypted links
-- **Offline Decryption**: Downloaded files can be decrypted locally
-- **Zero-Knowledge Architecture**: Server never sees plaintext data or encryption keys
+* **End-to-End Encryption (E2EE)** for all notes (AES-GCM with Android Keystore).
+* **Secure local storage** with SQLCipher for encrypted persistence.
+* **Biometric authentication** (fingerprint/face) to unlock the app.
+* **Multi-level authentication** – verify identity again before sharing notes.
+* **QR-code & NFC-based sharing** for offline, secure note transfer.
+* **Two-Factor Authentication (2FA)** for enhanced access control.
+* **Optional self-destructing notes** (time-limited or single-view).
 
-## 🚀 Quick Start
+## 🎯 Project Scope
 
-### Prerequisites
+This project demonstrates a balance between **cryptographic strength** and **user-friendly design**. It focuses on protecting sensitive personal or professional information such as passwords, academic notes, research findings, or confidential documents.
 
-- Node.js 16+ and npm
-- Firebase account
+## 📦 Tech Stack
 
-### Installation
+* **Frontend / App Development**: HTML5, CSS3, JavaScript (React or Vanilla JS)
+* **Backend**: Node.js with Express.js
+* **Database**: MongoDB with client-side encryption (encrypted local storage)
+* **Authentication**: Android Biometric API, Firebase Auth (optional)
+* **Secure Key Management**: Android Keystore
+* **Authentication**: JWT + Optional 2FA
+* **Sharing Mechanisms**: QR Code generator/scanner, NFC data exchange
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+## 📋 Deliverables
 
-3. Run the development server:
-   ```bash
-   npm run dev
-   ```
+* Web-based Prototype(Optional)
+* System documentation (architecture, data flow diagrams, use cases)
+* Usability, performance, and security testing results
+* Final project report and presentation
 
-4. Build for production:
-   ```bash
-   npm run build
-   ```
+## 🚀 Expected Outcomes
 
-### Firebase Setup
+* A **working proof-of-concept** app for secure note sharing.
+* Contribution to cybersecurity by applying E2EE to personal note management.
+* Usability testing showing that security can be **accessible to non-technical users**.
+* Potential foundation for further research or commercial privacy tools.
 
-The app is pre-configured with Firebase. To use your own Firebase project:
+## 👥 Team
 
-1. Update `src/firebase.js` with your Firebase configuration
-2. Enable Authentication (Email/Password and Google)
-3. Create Firestore Database
-4. Create Storage bucket
-5. Deploy the security rules (see below)
+This project is developed by the **MAL2020 Computing Group Project team**:
 
-### Security Rules
-
-**Firestore Rules** (`firestore.rules`):
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /files/{fileId} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
-
-**Storage Rules** (`storage.rules`):
-```
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
-
-## 🔒 Security Architecture
-
-### Encryption Flow
-
-1. **Upload**: 
-   - Generate unique AES-256 key per file
-   - Encrypt file in browser using Web Crypto API
-   - Upload encrypted file to Firebase Storage
-   - Store encrypted key and metadata in Firestore
-
-2. **Share**:
-   - Generate shareable link with encrypted key
-   - Create QR code containing encrypted key
-   - Grant access in Firestore
-
-3. **Download & Decrypt**:
-   - Retrieve encrypted file from Storage
-   - Get encrypted key from Firestore
-   - Decrypt locally in browser
-   - Save decrypted file
-
-### Security Features
-
-- ✅ Client-side encryption/decryption only
-- ✅ No plaintext data on server
-- ✅ Unique encryption key per file
-- ✅ Secure key sharing via QR/link
-- ✅ HTTPS enforced
-- ✅ Input sanitization
-- ✅ Session management
-
-## 📁 Project Structure
-
-```
-src/
-├── components/         # Reusable UI components
-├── pages/             # Page components
-├── services/          # Business logic (auth, encryption, storage)
-├── utils/             # Helper functions and constants
-├── firebase.js        # Firebase configuration
-├── App.jsx            # Main app component
-└── main.jsx           # Entry point
-```
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 18 + Vite
-- **UI**: TailwindCSS + Lucide Icons
-- **Backend**: Firebase (Auth, Firestore, Storage)
-- **Encryption**: Web Crypto API (AES-GCM)
-- **QR Codes**: qrcode.react
-- **Routing**: React Router v6
-
-## 📱 Usage
-
-1. **Register/Login**: Create an account or sign in
-2. **Upload Files**: Select files to encrypt and upload
-3. **View Dashboard**: See your files and files shared with you
-4. **Share Files**: Generate QR codes or shareable links
-5. **Download & Decrypt**: Retrieve and decrypt files locally
-
-## 🎯 Use Cases
-
-- Secure document sharing within teams
-- Confidential file transfer
-- Privacy-focused file storage
-- Cybersecurity education and demonstration
-- Zero-trust file sharing
-
-## ⚠️ Security Considerations
-
-- Always use HTTPS in production
-- Keep Firebase API keys secured (use environment variables)
-- Regularly update dependencies
-- Implement rate limiting on Firebase
-- Use strong passwords for authentication
-- Enable Firebase App Check for abuse prevention
+* Shidan
+* Farah
+* Danial
+* Wayden
 
 ## 📄 License
 
-This project is for educational and demonstration purposes.
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome!
-
----
-
-Built with ❤️ for secure file sharing
+This project is for **academic purposes only**. All rights reserved by the MAL2020 project team.
