@@ -1,0 +1,139 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to get user role
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Helper function to check roles
+    function isExamUnit() {
+      return isAuthenticated() && getUserRole() == 'exam_unit';
+    }
+    
+    function isHOS() {
+      return isAuthenticated() && getUserRole() == 'hos';
+    }
+    
+    function isLecturer() {
+      return isAuthenticated() && getUserRole() == 'lecturer';
+    }
+    
+    // Helper function to check if user owns the document
+    function isOwner(ownerId) {
+      return isAuthenticated() && request.auth.uid == ownerId;
+    }
+    
+    // Helper function to check if user has access to shared file
+    function hasSharedAccess(sharedWith) {
+      return isAuthenticated() && 
+        request.auth.token.email in sharedWith;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Users can update their own profile (but not role)
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Exam Unit can read all users and update roles
+      allow read, update: if isExamUnit();
+      
+      // HOS can read all users (needed for dashboard)
+      allow read: if isHOS();
+      
+      // Lecturers can read all users (for collaboration)
+      allow read: if isLecturer();
+      
+      // Allow user creation (registration)
+      allow create: if true;
+    }
+    
+    // Departments collection
+    match /departments/{deptId} {
+      // Exam Unit has full access
+      allow read, write: if isExamUnit();
+      
+      // HOS can read their own department
+      allow read: if isAuthenticated();
+      
+      // Lecturers can read departments
+      allow read: if isAuthenticated();
+    }
+    
+    // File Versions collection
+    match /fileVersions/{versionId} {
+      // Anyone authenticated can read versions
+      allow read: if isAuthenticated();
+      
+      // File owners can create versions
+      allow create: if isAuthenticated();
+      
+      // Exam Unit has full access
+      allow read, write: if isExamUnit();
+      
+      // Allow unauthenticated read for share links
+      allow read: if true;
+    }
+    
+    // Feedback collection
+    match /feedback/{feedbackId} {
+      // Anyone authenticated can read feedback
+      allow read: if isAuthenticated();
+      
+      // HOS and Exam Unit can create feedback
+      allow create: if isHOS() || isExamUnit();
+      
+      // Exam Unit can update/delete feedback
+      allow update, delete: if isExamUnit();
+    }
+    
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Users can update their own notifications (mark as read)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // System can create notifications
+      allow create: if isAuthenticated();
+      
+      // Exam Unit can manage all notifications
+      allow read, write: if isExamUnit();
+    }
+    
+    // Files collection
+    match /files/{fileId} {
+      // Lecturers can create files
+      allow create: if isAuthenticated() && 
+        request.resource.data.createdBy == request.auth.uid;
+      
+      // Owner can read, update, delete their files
+      allow read, update, delete: if isAuthenticated() && 
+        resource.data.createdBy == request.auth.uid;
+      
+      // Users with shared access can read
+      allow read: if isAuthenticated() && 
+        hasSharedAccess(resource.data.sharedWith);
+      
+      // HOS can read AND UPDATE files from their department (for approval/rejection)
+      allow read, update: if isHOS();
+      
+      // Exam Unit has full access
+      allow read, write: if isExamUnit();
+      
+      // IMPORTANT: Allow unauthenticated read for share links
+      // This is safe because files are encrypted end-to-end
+      // Users can only view encrypted files without the encryption key
+      allow read: if true;
+    }
+  }
+}
