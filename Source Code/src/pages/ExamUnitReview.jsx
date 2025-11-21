@@ -23,7 +23,8 @@ import {
   Building2,
   ChevronDown,
   ChevronUp,
-  Search
+  Search,
+  Clock
 } from 'lucide-react';
 import { formatFileSize, formatDate } from '../utils/helpers';
 
@@ -43,10 +44,12 @@ export default function ExamUnitReview() {
   const [success, setSuccess] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedDepts, setCollapsedDepts] = useState({});
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'approved'
   const [stats, setStats] = useState({
     pending: 0,
     approvedToday: 0,
     rejectedToday: 0,
+    totalApproved: 0,
     departments: 0
   });
 
@@ -109,10 +112,15 @@ export default function ExamUnitReview() {
         return rejectedDate.getTime() === today.getTime();
       }).length;
 
+      const totalApproved = allFilesData.filter(file => 
+        file.workflowStatus === 'APPROVED'
+      ).length;
+
       setStats({
         pending: reviewFiles.length,
         approvedToday: approvedToday,
         rejectedToday: rejectedToday,
+        totalApproved: totalApproved,
         departments: depts.length
       });
     } catch (err) {
@@ -214,7 +222,12 @@ export default function ExamUnitReview() {
     }));
   };
 
-  const filteredFiles = filterFiles(files);
+  // Get approved files
+  const approvedFiles = allFiles.filter(file => file.workflowStatus === 'APPROVED');
+  
+  // Filter files based on active tab
+  const currentFiles = activeTab === 'pending' ? files : approvedFiles;
+  const filteredFiles = filterFiles(currentFiles);
   const groupedFiles = groupByDepartment(filteredFiles);
 
   if (loading) {
@@ -255,7 +268,7 @@ export default function ExamUnitReview() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -263,7 +276,19 @@ export default function ExamUnitReview() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
-                <p className="text-sm text-gray-600">Pending Final Review</p>
+                <p className="text-sm text-gray-600">Pending Review</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{stats.totalApproved}</p>
+                <p className="text-sm text-gray-600">Total Approved</p>
               </div>
             </div>
           </div>
@@ -282,8 +307,8 @@ export default function ExamUnitReview() {
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <XCircle className="w-6 h-6 text-red-600" />
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                <XCircle className="w-6 h-6 text-orange-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900">{stats.rejectedToday}</p>
@@ -295,13 +320,49 @@ export default function ExamUnitReview() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FileText className="w-6 h-6 text-purple-600" />
+                <Building2 className="w-6 h-6 text-purple-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900">{stats.departments}</p>
                 <p className="text-sm text-gray-600">Departments</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+          <div className="flex border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('pending')}
+              className={`flex-1 px-6 py-4 font-medium transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'pending'
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <Clock className="w-5 h-5" />
+              Pending Review
+              {stats.pending > 0 && (
+                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold">
+                  {stats.pending}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('approved')}
+              className={`flex-1 px-6 py-4 font-medium transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'approved'
+                  ? 'text-green-600 border-b-2 border-green-600 bg-green-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <CheckCircle className="w-5 h-5" />
+              Approved Files
+              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                {stats.totalApproved}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -322,18 +383,30 @@ export default function ExamUnitReview() {
         {/* Files List - Grouped by Department */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Files Awaiting Final Approval</h2>
-            <p className="text-sm text-gray-600 mt-1">HOS-approved files grouped by department</p>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {activeTab === 'pending' ? 'Files Awaiting Final Approval' : 'Approved Files'}
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {activeTab === 'pending' 
+                ? 'HOS-approved files grouped by department' 
+                : 'All files that have completed final approval'}
+            </p>
           </div>
 
           {filteredFiles.length === 0 ? (
             <div className="p-12 text-center">
-              <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              {activeTab === 'pending' ? (
+                <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              ) : (
+                <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              )}
               <p className="text-gray-600 mb-2">
-                {searchQuery ? 'No files match your search' : 'No files pending final review'}
+                {searchQuery ? 'No files match your search' : 
+                  activeTab === 'pending' ? 'No files pending final review' : 'No approved files yet'}
               </p>
               <p className="text-sm text-gray-500">
-                {searchQuery ? 'Try adjusting your search query' : 'HOS-approved files will appear here'}
+                {searchQuery ? 'Try adjusting your search query' : 
+                  activeTab === 'pending' ? 'HOS-approved files will appear here' : 'Approved files will appear here'}
               </p>
             </div>
           ) : (
@@ -389,23 +462,43 @@ export default function ExamUnitReview() {
                               </div>
                             )}
 
-                            {/* Action Buttons */}
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleReview(file, 'approve')}
-                                className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => handleReview(file, 'reject')}
-                                className="flex-1 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
-                              >
-                                <XCircle className="w-4 h-4" />
-                                Request Revision
-                              </button>
-                            </div>
+                            {/* Exam Unit Comments (for approved files) */}
+                            {activeTab === 'approved' && file.examUnitComments && (
+                              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                                <p className="text-xs font-medium text-green-900 mb-1">Exam Unit Comments:</p>
+                                <p className="text-sm text-green-800">{file.examUnitComments}</p>
+                              </div>
+                            )}
+
+                            {/* Approval Info (for approved files) */}
+                            {activeTab === 'approved' && file.examUnitApprovedAt && (
+                              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                                <p className="text-xs font-medium text-emerald-900 mb-1">✓ Approved</p>
+                                <p className="text-xs text-emerald-800">
+                                  By {file.examUnitApprovedByName || 'Exam Unit'} on {formatDate(file.examUnitApprovedAt)}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Action Buttons (only for pending tab) */}
+                            {activeTab === 'pending' && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleReview(file, 'approve')}
+                                  className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleReview(file, 'reject')}
+                                  className="flex-1 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                  Request Revision
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

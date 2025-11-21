@@ -21,7 +21,6 @@ import {
   Search, 
   Filter, 
   X, 
-  QrCode,
   FileCheck,
   Clock,
   CheckCircle,
@@ -497,14 +496,6 @@ export default function Dashboard() {
                 {(selectedCategory !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0)}
               </span>
             )}
-          </button>
-          <button
-            onClick={() => navigate('/access')}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-            title="Access file via QR or link"
-          >
-            <QrCode className="w-4 h-4" />
-            Access File
           </button>
         </div>
 
