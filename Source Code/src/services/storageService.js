@@ -90,8 +90,16 @@ export const deleteFile = async (userId, fileId, filename) => {
   try {
     const storageRef = ref(storage, `users/${userId}/${fileId}/${filename}.enc`);
     await deleteObject(storageRef);
+    console.log('✅ File deleted from storage:', filename);
   } catch (error) {
-    console.error('Error deleting file:', error);
+    // If file doesn't exist (404), that's fine - it's already gone
+    if (error.code === 'storage/object-not-found') {
+      console.warn('⚠️ File not found in storage (already deleted):', filename);
+      return; // Don't throw error, just continue
+    }
+    
+    // For other errors, log and throw
+    console.error('Error deleting file from storage:', error);
     throw new Error('Failed to delete file from storage');
   }
 };

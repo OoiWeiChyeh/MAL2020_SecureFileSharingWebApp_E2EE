@@ -103,6 +103,9 @@ service cloud.firestore {
       // Users can update their own notifications (mark as read)
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
       // System can create notifications
       allow create: if isAuthenticated();
       

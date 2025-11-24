@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Bell, X, Check, AlertCircle, Info, CheckCircle } from 'lucide-react';
+import { Bell, X, Check, AlertCircle, Info, CheckCircle, Trash2 } from 'lucide-react';
 import { getCurrentUser } from '../services/authService';
 import {
   getUserNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
-  getUnreadNotificationCount
+  getUnreadNotificationCount,
+  deleteNotification,
+  clearAllNotifications,
+  clearReadNotifications
 } from '../services/firestoreService';
 import { useNavigate } from 'react-router-dom';
 
@@ -58,6 +61,62 @@ export default function NotificationsPanel() {
       await loadNotifications();
     } catch (err) {
       console.error('Error marking all as read:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId, e) => {
+    e.stopPropagation(); // Prevent notification click
+    try {
+      await deleteNotification(notificationId);
+      await loadNotifications();
+    } catch (err) {
+      console.error('Error deleting notification:', err);
+    }
+  };
+
+  const handleClearAll = async () => {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    if (!window.confirm('Delete all notifications? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const count = await clearAllNotifications(user.uid);
+      await loadNotifications();
+      alert(`Cleared ${count} notification${count !== 1 ? 's' : ''}`);
+    } catch (err) {
+      console.error('Error clearing all notifications:', err);
+      alert('Failed to clear notifications');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearRead = async () => {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    if (!window.confirm('Delete all read notifications?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const count = await clearReadNotifications(user.uid);
+      await loadNotifications();
+      if (count > 0) {
+        alert(`Cleared ${count} read notification${count !== 1 ? 's' : ''}`);
+      } else {
+        alert('No read notifications to clear');
+      }
+    } catch (err) {
+      console.error('Error clearing read notifications:', err);
+      alert('Failed to clear read notifications');
     } finally {
       setLoading(false);
     }
@@ -129,18 +188,9 @@ export default function NotificationsPanel() {
           {/* Panel */}
           <div className="absolute right-0 mt-2 w-96 bg-white rounded-xl shadow-xl border border-gray-200 z-50 max-h-[600px] flex flex-col">
             {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
-              <div className="flex items-center gap-2">
-                {unreadCount > 0 && (
-                  <button
-                    onClick={handleMarkAllAsRead}
-                    disabled={loading}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Mark all as read
-                  </button>
-                )}
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
                 <button
                   onClick={() => setIsOpen(false)}
                   className="p-1 hover:bg-gray-100 rounded"
@@ -148,6 +198,34 @@ export default function NotificationsPanel() {
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
+              {/* Action Buttons */}
+              {notifications.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllAsRead}
+                      disabled={loading}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                    >
+                      ✓ Mark all read
+                    </button>
+                  )}
+                  <button
+                    onClick={handleClearRead}
+                    disabled={loading}
+                    className="text-xs text-orange-600 hover:text-orange-700 font-medium px-2 py-1 rounded hover:bg-orange-50 transition-colors"
+                  >
+                    🗑️ Clear read
+                  </button>
+                  <button
+                    onClick={handleClearAll}
+                    disabled={loading}
+                    className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                  >
+                    🗑️ Clear all
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Notifications List */}
@@ -182,18 +260,27 @@ export default function NotificationsPanel() {
                             {formatTime(notification.createdAt)}
                           </p>
                         </div>
-                        {!notification.read && (
+                        <div className="flex items-center gap-1">
+                          {!notification.read && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMarkAsRead(notification.id);
+                              }}
+                              className="flex-shrink-0 p-1 hover:bg-gray-200 rounded"
+                              title="Mark as read"
+                            >
+                              <Check className="w-4 h-4 text-gray-600" />
+                            </button>
+                          )}
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMarkAsRead(notification.id);
-                            }}
-                            className="flex-shrink-0 p-1 hover:bg-gray-200 rounded"
-                            title="Mark as read"
+                            onClick={(e) => handleDeleteNotification(notification.id, e)}
+                            className="flex-shrink-0 p-1 hover:bg-red-100 rounded"
+                            title="Delete notification"
                           >
-                            <Check className="w-4 h-4 text-gray-600" />
+                            <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
                           </button>
-                        )}
+                        </div>
                       </div>
                     </div>
                   ))}

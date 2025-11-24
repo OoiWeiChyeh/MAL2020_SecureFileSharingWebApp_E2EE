@@ -79,18 +79,20 @@ export default function FileCard({ file, isOwner, onDeleted, onSelect, isSelecte
     try {
       const user = getCurrentUser();
       
-      // Delete from storage
+      // Delete from storage (will not fail if file doesn't exist)
       await deleteFile(user.uid, file.fileId, file.fileName);
       
-      // Delete metadata
+      // Delete metadata from Firestore (always do this)
       await deleteFileMetadata(file.id);
+      
+      console.log('✅ File and metadata deleted successfully');
       
       if (onDeleted) {
         onDeleted();
       }
     } catch (err) {
       console.error('Error deleting file:', err);
-      alert('Failed to delete file');
+      alert('Failed to delete file: ' + err.message);
     } finally {
       setDeleting(false);
     }

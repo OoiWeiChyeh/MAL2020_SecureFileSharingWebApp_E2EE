@@ -5,14 +5,19 @@ import {
   getPendingUsers, 
   getAllUsers,
   updateUserRole,
+  updateUser,
+  deleteUser,
   getUserRole,
   getDepartments,
   createDepartment,
+  updateDepartment,
   deleteDepartment,
   assignHOSToDepartment,
   addCourseToDepartment,
+  updateCourse,
   deleteCourse,
   addSubjectToCourse,
+  updateSubject,
   deleteSubject,
   assignLecturerToSubject,
   unassignLecturerFromSubject,
@@ -35,7 +40,10 @@ import {
   Search,
   ArrowLeft,
   Award,
-  UserPlus
+  UserPlus,
+  Edit2,
+  Save,
+  X
 } from 'lucide-react';
 
 export default function AdminPanel() {
@@ -70,6 +78,13 @@ export default function AdminPanel() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  
+  // Edit modal states
+  const [editingUser, setEditingUser] = useState(null);
+  const [editingDept, setEditingDept] = useState(null);
+  const [editingCourse, setEditingCourse] = useState(null);
+  const [editingSubject, setEditingSubject] = useState(null);
+  const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
     checkAccess();
@@ -312,6 +327,122 @@ export default function AdminPanel() {
     setExpandedCourses(prev => ({ ...prev, [courseId]: !prev[courseId] }));
   };
 
+  // ==================== EDIT & DELETE HANDLERS ====================
+  
+  const handleEditUser = (user) => {
+    setEditingUser(user);
+    setEditForm({
+      displayName: user.displayName || '',
+      email: user.email || '',
+      role: user.role || '',
+      department: user.department || ''
+    });
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+    try {
+      setSubmitting(true);
+      await updateUser(editingUser.id, editForm);
+      setSuccess('User updated successfully');
+      setEditingUser(null);
+      setEditForm({});
+      await loadData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError('Failed to update user');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!confirm('Are you sure you want to delete this user? This will remove all their data from the system.')) return;
+    try {
+      await deleteUser(userId);
+      setSuccess('User deleted successfully');
+      await loadData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError('Failed to delete user');
+    }
+  };
+
+  const handleEditDepartment = (dept) => {
+    setEditingDept(dept);
+    setEditForm({
+      name: dept.name || '',
+      code: dept.code || ''
+    });
+  };
+
+  const handleSaveDepartment = async () => {
+    if (!editingDept) return;
+    try {
+      setSubmitting(true);
+      await updateDepartment(editingDept.id, editForm);
+      setSuccess('Department updated successfully');
+      setEditingDept(null);
+      setEditForm({});
+      await loadData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError('Failed to update department');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditCourse = (deptId, course) => {
+    setEditingCourse({ deptId, ...course });
+    setEditForm({
+      courseName: course.courseName || '',
+      courseCode: course.courseCode || ''
+    });
+  };
+
+  const handleSaveCourse = async () => {
+    if (!editingCourse) return;
+    try {
+      setSubmitting(true);
+      await updateCourse(editingCourse.deptId, editingCourse.courseId, editForm);
+      setSuccess('Course updated successfully');
+      setEditingCourse(null);
+      setEditForm({});
+      await loadData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError('Failed to update course');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditSubject = (deptId, courseId, subject) => {
+    setEditingSubject({ deptId, courseId, ...subject });
+    setEditForm({
+      subjectName: subject.subjectName || '',
+      subjectCode: subject.subjectCode || ''
+    });
+  };
+
+  const handleSaveSubject = async () => {
+    if (!editingSubject) return;
+    try {
+      setSubmitting(true);
+      await updateSubject(editingSubject.deptId, editingSubject.courseId, editingSubject.subjectId, editForm);
+      setSuccess('Subject updated successfully');
+      setEditingSubject(null);
+      setEditForm({});
+      await loadData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError('Failed to update subject');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const lecturers = allUsers.filter(u => u.role === 'lecturer');
   const hosUsers = allUsers.filter(u => u.role === 'hos');
 
@@ -545,6 +676,7 @@ export default function AdminPanel() {
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Department</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Subjects</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Joined</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -592,6 +724,24 @@ export default function AdminPanel() {
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-600">
                               {user.createdAt?.toDate().toLocaleDateString() || 'N/A'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleEditUser(user)}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="Edit User"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete User"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -695,6 +845,13 @@ export default function AdminPanel() {
                                 </select>
                               )}
                               <button
+                                onClick={() => handleEditDepartment(dept)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit Department"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => {
                                   setSelectedDeptForCourse(dept.id);
                                   setShowAddCourse(true);
@@ -705,7 +862,8 @@ export default function AdminPanel() {
                               </button>
                               <button
                                 onClick={() => handleDeleteDepartment(dept.id)}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete Department"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -738,6 +896,13 @@ export default function AdminPanel() {
                                     </div>
                                     <div className="flex gap-2">
                                       <button
+                                        onClick={() => handleEditCourse(dept.id, course)}
+                                        className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                        title="Edit Course"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                      </button>
+                                      <button
                                         onClick={() => {
                                           setSelectedDeptForCourse(dept.id);
                                           setSelectedCourseForSubject(course.courseId);
@@ -749,7 +914,8 @@ export default function AdminPanel() {
                                       </button>
                                       <button
                                         onClick={() => handleDeleteCourse(dept.id, course.courseId)}
-                                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                        className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                        title="Delete Course"
                                       >
                                         <Trash2 className="w-3 h-3" />
                                       </button>
@@ -778,6 +944,13 @@ export default function AdminPanel() {
                                           </div>
                                         </div>
                                         <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleEditSubject(dept.id, course.courseId, subject)}
+                                            className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                            title="Edit Subject"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
                                           {subject.assignedLecturerId ? (
                                             <button
                                               onClick={() => handleUnassignLecturer(dept.id, course.courseId, subject.subjectId, subject.assignedLecturerId)}
@@ -1110,6 +1283,241 @@ export default function AdminPanel() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-gray-900">Edit User</h3>
+              <button onClick={() => { setEditingUser(null); setEditForm({}); }} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
+                <input
+                  type="text"
+                  value={editForm.displayName || ''}
+                  onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={editForm.email || ''}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                <select
+                  value={editForm.role || ''}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="lecturer">Lecturer</option>
+                  <option value="hos">HOS</option>
+                  <option value="exam_unit">Exam Unit</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                <select
+                  value={editForm.department || ''}
+                  onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">None</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex gap-2">
+              <button
+                onClick={handleSaveUser}
+                disabled={submitting}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {submitting ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => { setEditingUser(null); setEditForm({}); }}
+                disabled={submitting}
+                className="px-6 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Department Modal */}
+      {editingDept && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Department</h3>
+              <button onClick={() => { setEditingDept(null); setEditForm({}); }} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Department Name</label>
+                <input
+                  type="text"
+                  value={editForm.name || ''}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Department Code</label>
+                <input
+                  type="text"
+                  value={editForm.code || ''}
+                  onChange={(e) => setEditForm({ ...editForm, code: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex gap-2">
+              <button
+                onClick={handleSaveDepartment}
+                disabled={submitting}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {submitting ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => { setEditingDept(null); setEditForm({}); }}
+                disabled={submitting}
+                className="px-6 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {editingCourse && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Course</h3>
+              <button onClick={() => { setEditingCourse(null); setEditForm({}); }} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Course Name</label>
+                <input
+                  type="text"
+                  value={editForm.courseName || ''}
+                  onChange={(e) => setEditForm({ ...editForm, courseName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Course Code</label>
+                <input
+                  type="text"
+                  value={editForm.courseCode || ''}
+                  onChange={(e) => setEditForm({ ...editForm, courseCode: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex gap-2">
+              <button
+                onClick={handleSaveCourse}
+                disabled={submitting}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {submitting ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => { setEditingCourse(null); setEditForm({}); }}
+                disabled={submitting}
+                className="px-6 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Subject Modal */}
+      {editingSubject && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Subject</h3>
+              <button onClick={() => { setEditingSubject(null); setEditForm({}); }} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subject Name</label>
+                <input
+                  type="text"
+                  value={editForm.subjectName || ''}
+                  onChange={(e) => setEditForm({ ...editForm, subjectName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subject Code</label>
+                <input
+                  type="text"
+                  value={editForm.subjectCode || ''}
+                  onChange={(e) => setEditForm({ ...editForm, subjectCode: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex gap-2">
+              <button
+                onClick={handleSaveSubject}
+                disabled={submitting}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {submitting ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => { setEditingSubject(null); setEditForm({}); }}
+                disabled={submitting}
+                className="px-6 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

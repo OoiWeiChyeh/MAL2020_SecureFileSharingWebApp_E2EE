@@ -333,6 +333,42 @@ export const updateUserRole = async (userId, role, additionalData = {}) => {
   }
 };
 
+/**
+ * Update user profile (displayName, email, role, department)
+ */
+export const updateUser = async (userId, updates) => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete user from Firestore
+ * Note: Firebase Auth deletion requires Admin SDK on backend
+ * This removes user data from Firestore only
+ */
+export const deleteUser = async (userId) => {
+  try {
+    // Delete user document from Firestore
+    const userRef = doc(db, 'users', userId);
+    await deleteDoc(userRef);
+    
+    // Note: To delete from Firebase Auth, you need Firebase Admin SDK on backend
+    // For now, this only removes Firestore data
+    console.log(`User ${userId} data deleted from Firestore. Auth account still exists.`);
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    throw error;
+  }
+};
+
 export const getPendingUsers = async () => {
   try {
     const usersRef = collection(db, 'users');
@@ -414,8 +450,52 @@ export const updateDepartment = async (deptId, updates) => {
 
 export const deleteDepartment = async (deptId) => {
   try {
+    // First, clean up all user assignments related to this department
+    const usersRef = collection(db, 'users');
+    const usersSnapshot = await getDocs(usersRef);
+    
+    const updatePromises = [];
+    
+    usersSnapshot.forEach((userDoc) => {
+      const userData = userDoc.data();
+      const updates = {};
+      let needsUpdate = false;
+      
+      // Clear department field if it matches the deleted department
+      if (userData.department === deptId) {
+        updates.department = null;
+        needsUpdate = true;
+      }
+      
+      // Remove assigned subjects from this department (for lecturers)
+      if (userData.assignedSubjects && Array.isArray(userData.assignedSubjects)) {
+        const filteredSubjects = userData.assignedSubjects.filter(
+          subject => subject.deptId !== deptId
+        );
+        
+        // Only update if subjects were removed
+        if (filteredSubjects.length !== userData.assignedSubjects.length) {
+          updates.assignedSubjects = filteredSubjects;
+          needsUpdate = true;
+        }
+      }
+      
+      // Update user if any changes needed
+      if (needsUpdate) {
+        updates.updatedAt = serverTimestamp();
+        const userRef = doc(db, 'users', userDoc.id);
+        updatePromises.push(updateDoc(userRef, updates));
+      }
+    });
+    
+    // Wait for all user updates to complete
+    await Promise.all(updatePromises);
+    
+    // Now delete the department
     const deptRef = doc(db, 'departments', deptId);
     await deleteDoc(deptRef);
+    
+    console.log(`Department ${deptId} deleted. Cleaned up ${updatePromises.length} user assignments.`);
   } catch (error) {
     console.error('Error deleting department:', error);
     throw error;
@@ -670,6 +750,79 @@ export const unassignLecturerFromSubject = async (deptId, courseId, subjectId, l
   }
 };
 
+export const updateSubject = async (deptId, courseId, subjectId, updates) => {
+  try {
+    const deptRef = doc(db, 'departments', deptId);
+    const deptSnap = await getDoc(deptRef);
+    
+    if (!deptSnap.exists()) {
+      throw new Error('Department not found');
+    }
+    
+    const courses = deptSnap.data().courses || [];
+    const courseIndex = courses.findIndex(c => c.courseId === courseId);
+    
+    if (courseIndex === -1) {
+      throw new Error('Course not found');
+    }
+    
+    const subjectIndex = courses[courseIndex].subjects.findIndex(s => s.subjectId === subjectId);
+    
+    if (subjectIndex === -1) {
+      throw new Error('Subject not found');
+    }
+    
+    // Update subject fields
+    courses[courseIndex].subjects[subjectIndex] = {
+      ...courses[courseIndex].subjects[subjectIndex],
+      ...updates
+    };
+    
+    await updateDoc(deptRef, {
+      courses,
+      updatedAt: serverTimestamp()
+    });
+    
+    // If subject name or code changed, update lecturer's assigned subjects
+    if (updates.subjectName || updates.subjectCode) {
+      const usersRef = collection(db, 'users');
+      const usersSnapshot = await getDocs(usersRef);
+      
+      const updatePromises = [];
+      usersSnapshot.forEach((userDoc) => {
+        const userData = userDoc.data();
+        if (userData.assignedSubjects && Array.isArray(userData.assignedSubjects)) {
+          const updatedSubjects = userData.assignedSubjects.map(subject => {
+            if (subject.subjectId === subjectId) {
+              return {
+                ...subject,
+                ...(updates.subjectName && { subjectName: updates.subjectName }),
+                ...(updates.subjectCode && { subjectCode: updates.subjectCode })
+              };
+            }
+            return subject;
+          });
+          
+          // Check if any subject was updated
+          const hasChanges = JSON.stringify(updatedSubjects) !== JSON.stringify(userData.assignedSubjects);
+          if (hasChanges) {
+            const userRef = doc(db, 'users', userDoc.id);
+            updatePromises.push(updateDoc(userRef, {
+              assignedSubjects: updatedSubjects,
+              updatedAt: serverTimestamp()
+            }));
+          }
+        }
+      });
+      
+      await Promise.all(updatePromises);
+    }
+  } catch (error) {
+    console.error('Error updating subject:', error);
+    throw error;
+  }
+};
+
 export const deleteSubject = async (deptId, courseId, subjectId) => {
   try {
     const deptRef = doc(db, 'departments', deptId);
@@ -869,6 +1022,60 @@ export const getUnreadNotificationCount = async (userId) => {
   } catch (error) {
     console.error('Error getting unread count:', error);
     return 0;
+  }
+};
+
+/**
+ * Delete a single notification
+ */
+export const deleteNotification = async (notificationId) => {
+  try {
+    const notificationRef = doc(db, 'notifications', notificationId);
+    await deleteDoc(notificationRef);
+    console.log('✅ Notification deleted');
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    throw error;
+  }
+};
+
+/**
+ * Clear all notifications for a user (delete permanently)
+ */
+export const clearAllNotifications = async (userId) => {
+  try {
+    const notificationRef = collection(db, 'notifications');
+    const q = query(notificationRef, where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    
+    const deletes = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletes);
+    
+    console.log(`✅ Cleared ${snapshot.size} notifications`);
+    return snapshot.size;
+  } catch (error) {
+    console.error('Error clearing all notifications:', error);
+    throw error;
+  }
+};
+
+/**
+ * Clear only read notifications for a user
+ */
+export const clearReadNotifications = async (userId) => {
+  try {
+    const notificationRef = collection(db, 'notifications');
+    const q = query(notificationRef, where('userId', '==', userId), where('read', '==', true));
+    const snapshot = await getDocs(q);
+    
+    const deletes = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletes);
+    
+    console.log(`✅ Cleared ${snapshot.size} read notifications`);
+    return snapshot.size;
+  } catch (error) {
+    console.error('Error clearing read notifications:', error);
+    throw error;
   }
 };
 
