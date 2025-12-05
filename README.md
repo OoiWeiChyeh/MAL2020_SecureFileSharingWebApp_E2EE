@@ -2,6 +2,26 @@
 
 A **secure, web-based exam paper management system** with **End-to-End Encryption (E2EE)** and role-based approval workflow. This project is developed as part of the *Computing Group Project (MAL2020)* to demonstrate how strong cryptography can be combined with practical workflow management for academic institutions.
 
+---
+
+## ⚡ Quick Test (No Setup Required!)
+
+**Want to test the system right away?** Visit the live demo:
+
+🔗 **https://file-share-f8260.web.app/login**
+
+### Test Credentials:
+
+| Email | Password | Role |
+|-------|----------|------|
+| `examunit@admin.com` | `ExamUnit2025!` | Exam Unit (Admin) |
+| `Lecture1@test.com` | `test123456` | Lecturer |
+| `Hos1@test.com` | `test123456` | HOS (Head of School) |
+
+**Note:** More test accounts available for local development (see [Quick Start](#-quick-start-local-development) section below)
+
+---
+
 ## 🔐 Features
 
 * **End-to-End Encryption (E2EE)** for all exam papers using **AES-256-GCM** encryption (Web Crypto API).
@@ -37,7 +57,7 @@ This project demonstrates a balance between **cryptographic strength** and **use
 * **Development**: Firebase Emulator Suite (local development)
 * **Deployment**: Firebase Hosting
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Local Development)
 
 ```bash
 # 1. Clone & Install
