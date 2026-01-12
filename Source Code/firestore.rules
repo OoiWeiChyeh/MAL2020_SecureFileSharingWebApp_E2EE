@@ -43,8 +43,8 @@ service cloud.firestore {
       // Users can update their own profile (but not role)
       allow update: if isAuthenticated() && request.auth.uid == userId;
       
-      // Exam Unit can read all users and update roles
-      allow read, update: if isExamUnit();
+      // Exam Unit can read, update, and delete all users
+      allow read, update, delete: if isExamUnit();
       
       // HOS can read all users (needed for dashboard)
       allow read: if isHOS();

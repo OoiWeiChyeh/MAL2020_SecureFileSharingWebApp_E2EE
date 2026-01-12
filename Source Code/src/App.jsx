@@ -10,7 +10,6 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Upload from './pages/Upload';
 import ViewFile from './pages/ViewFile';
-import AccessFile from './pages/AccessFile';
 import Settings from './pages/Settings';
 import AdminPanel from './pages/AdminPanel';
 import PendingApproval from './pages/PendingApproval';
@@ -206,9 +205,6 @@ function App() {
         {/* Public file viewing (with key in URL) */}
         <Route path="/file" element={<ViewFile />} />
         <Route path="/view/:fileId" element={<ViewFile />} />
-        
-        {/* Public access page for QR codes and links */}
-        <Route path="/access" element={<AccessFile />} />
 
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
