@@ -1,0 +1,38 @@
+{
+  "name": "secure-share-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "emulator": "npx firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
+    "emulator:fresh": "npx firebase emulators:start",
+    "seed": "node seed-simple.js"
+  },
+  "dependencies": {
+    "file-saver": "^2.0.5",
+    "firebase": "^12.8.0",
+    "lucide-react": "^0.294.0",
+    "node-fetch": "^3.3.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "baseline-browser-mapping": "^2.9.17",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "vite": "^6.4.1"
+  }
+}
