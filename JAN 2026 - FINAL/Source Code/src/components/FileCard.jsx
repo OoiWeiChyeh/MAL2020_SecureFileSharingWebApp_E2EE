@@ -1,0 +1,513 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { deleteFile } from '../services/storageService';
+import { deleteFileMetadata, getDownloadHistory, daysUntilExpiration, isFileExpired, submitFileForReview } from '../services/firestoreService';
+import { getCurrentUser } from '../services/authService';
+import { formatFileSize, formatDate, getFileIcon } from '../utils/helpers';
+import { Download, Trash2, MoreVertical, FileText, Image, Archive, Video, Music, File, History, X, Clock, Send, CheckCircle, AlertCircle, Clock as ClockIcon, FileCheck, GitBranch, UploadCloud, List, Eye } from 'lucide-react';
+import VersionHistoryModal from './VersionHistoryModal';
+import UploadNewVersionModal from './UploadNewVersionModal';
+import FileTimelineModal from './FileTimelineModal';
+
+const iconMap = {
+  FileText,
+  Image,
+  Archive,
+  Video,
+  Music,
+  File
+};
+
+const CATEGORY_COLORS = {
+  'question-paper': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300' },
+  'answer-key': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300' },
+  'rubric': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300' },
+  'marking-scheme': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300' },
+  'model-answer': { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300' },
+  'other': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300' }
+};
+
+const CATEGORY_LABELS = {
+  'question-paper': '📄 Question Paper',
+  'answer-key': '✓ Answer Key',
+  'rubric': '📋 Rubric',
+  'marking-scheme': '🎯 Marking Scheme',
+  'model-answer': '⭐ Model Answer',
+  'other': '📎 Other'
+};
+
+const WORKFLOW_STATUS = {
+  'DRAFT': { label: 'Draft', icon: FileText, color: 'bg-gray-100 text-gray-700 border-gray-300' },
+  'PENDING_HOS_REVIEW': { label: 'Pending HOS Review', icon: ClockIcon, color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
+  'NEEDS_REVISION': { label: 'Needs Revision', icon: AlertCircle, color: 'bg-red-100 text-red-700 border-red-300' },
+  'PENDING_EXAM_UNIT': { label: 'Pending Exam Unit', icon: ClockIcon, color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  'APPROVED': { label: 'Approved', icon: CheckCircle, color: 'bg-green-100 text-green-700 border-green-300' }
+};
+
+export default function FileCard({ file, isOwner, onDeleted, onSelect, isSelected, userRole, onViewPDF }) {
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [downloadHistory, setDownloadHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showUploadVersion, setShowUploadVersion] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
+
+  const IconComponent = iconMap[getFileIcon(file.fileType)] || File;
+  const category = file.category || 'other';
+  const categoryColor = CATEGORY_COLORS[category] || CATEGORY_COLORS['other'];
+  const daysLeft = daysUntilExpiration(file);
+  const expired = isFileExpired(file);
+
+  // HOS and Exam Unit can view files but not edit/delete
+  const canViewDetails = isOwner || userRole === 'hos' || userRole === 'exam_unit';
+  const canEdit = isOwner; // Only owner can upload new version, delete
+
+  const handleView = () => {
+    navigate(`/file?id=${file.id}#key=${encodeURIComponent(file.encryptionKey)}`);
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const user = getCurrentUser();
+
+      // Delete from storage (will not fail if file doesn't exist)
+      await deleteFile(user.uid, file.fileId, file.fileName);
+
+      // Delete metadata from Firestore (always do this)
+      await deleteFileMetadata(file.id);
+
+      console.log('✅ File and metadata deleted successfully');
+
+      if (onDeleted) {
+        onDeleted();
+      }
+    } catch (err) {
+      console.error('Error deleting file:', err);
+      alert('Failed to delete file: ' + err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleShowHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      console.log('Loading download history for file:', file.id);
+      const history = await getDownloadHistory(file.id);
+      console.log('Download history loaded:', history);
+      setDownloadHistory(history || []);
+      setShowHistory(true);
+    } catch (err) {
+      console.error('Error loading history:', err);
+      alert('Failed to load download history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    if (!confirm('Submit this file for HOS review?')) return;
+
+    try {
+      setSubmitting(true);
+      const user = getCurrentUser();
+      await submitFileForReview(file.id, user.uid, user.displayName || user.email);
+      alert('File submitted for review successfully!');
+      if (onDeleted) onDeleted(); // Refresh
+    } catch (err) {
+      console.error('Error submitting for review:', err);
+      alert('Failed to submit for review');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const workflowStatus = file.workflowStatus || 'DRAFT';
+  const statusInfo = WORKFLOW_STATUS[workflowStatus] || WORKFLOW_STATUS['DRAFT'];
+  const StatusIcon = statusInfo.icon;
+
+  // Determine card background color based on status (consistent with ReviewFileCard)
+  const getCardBackground = () => {
+    if (isSelected) return 'border-blue-500 bg-blue-50';
+
+    const status = file.workflowStatus;
+    if (status === 'PENDING_HOS_REVIEW' || status === 'PENDING_EXAM_UNIT') {
+      return 'bg-yellow-50/50 border-yellow-300'; // Yellow for files needing review
+    } else if (status === 'APPROVED') {
+      return 'bg-green-50/50 border-green-300'; // Green for final approval
+    } else if (status === 'PENDING_EXAM_UNIT' && file.hosApprovedAt) {
+      return 'bg-yellow-50/50 border-yellow-300'; // Yellow for waiting Exam Unit approval
+    } else if (status === 'NEEDS_REVISION') {
+      return 'bg-red-50/50 border-red-300'; // Red for rejected/needs revision
+    }
+    return 'bg-white border-gray-200'; // Default
+  };
+
+  return (
+    <>
+      <div className={`border-2 rounded-xl p-4 hover:shadow-md transition-all ${getCardBackground()}`}>
+        {/* Checkbox for batch selection */}
+        {onSelect && (
+          <div className="flex items-start justify-between mb-3">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => onSelect(file.id, e.target.checked)}
+              className="w-5 h-5 text-blue-600 rounded cursor-pointer"
+            />
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <IconComponent className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-medium text-gray-900 truncate text-sm" title={file.fileName}>
+                {file.fileName}
+              </h3>
+              <p className="text-xs text-gray-500">{formatFileSize(file.fileSize)}</p>
+            </div>
+          </div>
+
+          {/* Menu */}
+          <div className="relative ml-2 flex-shrink-0">
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="p-1 hover:bg-gray-100 rounded transition-colors"
+            >
+              <MoreVertical className="w-5 h-5 text-gray-500" />
+            </button>
+
+            {menuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setMenuOpen(false)}
+                ></div>
+                <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                  {onViewPDF && (userRole === 'hos' || userRole === 'exam_unit') ? (
+                    <button
+                      onClick={() => {
+                        onViewPDF(file);
+                        setMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View PDF
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        handleView();
+                        setMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download
+                    </button>
+                  )}
+
+                  {/* Version control features - available to HOS, Exam Unit, and Owner */}
+                  {canViewDetails && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setShowTimeline(true);
+                          setMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50"
+                      >
+                        <List className="w-4 h-4" />
+                        File Timeline
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowVersionHistory(true);
+                          setMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                      >
+                        <GitBranch className="w-4 h-4" />
+                        Version History
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleShowHistory();
+                          setMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                      >
+                        <History className="w-4 h-4" />
+                        Download History
+                      </button>
+                    </>
+                  )}
+
+                  {/* Owner-only features - hide Upload New Version when pending or approved */}
+                  {canEdit && (
+                    <>
+                      {(workflowStatus === 'DRAFT' || workflowStatus === 'NEEDS_REVISION') && (
+                        <button
+                          onClick={() => {
+                            setShowUploadVersion(true);
+                            setMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                        >
+                          <UploadCloud className="w-4 h-4" />
+                          Upload New Version
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          handleDelete();
+                          setMenuOpen(false);
+                        }}
+                        disabled={deleting}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {deleting ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Category and Status Badges - Enhanced */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${categoryColor.bg} ${categoryColor.text} border ${categoryColor.border}`}>
+            {CATEGORY_LABELS[category]}
+          </div>
+          <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border ${statusInfo.color}`}>
+            <StatusIcon className="w-3 h-3" />
+            {statusInfo.label}
+          </div>
+          {file.isLate && (
+            <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-red-100 text-red-700 border border-red-300">
+              🕐 LATE
+            </div>
+          )}
+        </div>
+
+        {/* Revision requested by: HOS or Exam Unit (for lecturer / owner) */}
+        {file.workflowStatus === 'NEEDS_REVISION' && (
+          file.examUnitRejectedAt ? (
+            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-xs font-semibold text-red-800 mb-1">Revision requested by: Exam Unit</p>
+              {file.examUnitRejectedByName && (
+                <p className="text-xs text-red-700 mb-1">By {file.examUnitRejectedByName}</p>
+              )}
+              {file.examUnitRejectionReason && (
+                <p className="text-xs text-red-600 mt-1 leading-relaxed">{file.examUnitRejectionReason}</p>
+              )}
+            </div>
+          ) : (
+            <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-xs font-semibold text-orange-800 mb-1">Revision requested by: HOS</p>
+              {file.hosRejectedByName && (
+                <p className="text-xs text-orange-700 mb-1">By {file.hosRejectedByName}</p>
+              )}
+              {file.hosRejectionReason && (
+                <p className="text-xs text-orange-600 mt-1 leading-relaxed">{file.hosRejectionReason}</p>
+              )}
+            </div>
+          )
+        )}
+
+        {/* Expiration Badge */}
+        {file.expiresAt && daysLeft !== null && (
+          <div className={`inline-block ml-2 px-2 py-1 rounded text-xs font-medium mb-3 ${expired ? 'bg-red-100' : daysLeft <= 3 ? 'bg-yellow-100' : 'bg-green-100'
+            }`}>
+            <Clock className="w-3 h-3 inline mr-1" />
+            {expired ? 'EXPIRED' : `${daysLeft}d left`}
+          </div>
+        )}
+
+        {/* Lecturer and Subject Info (for HOS/Exam Unit) */}
+        {!isOwner && (userRole === 'hos' || userRole === 'exam_unit') && (
+          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs space-y-1">
+            {file.createdByName && (
+              <div className="flex items-center justify-between">
+                <span className="text-blue-600 font-medium">Lecturer:</span>
+                <span className="text-blue-900">{file.createdByName}</span>
+              </div>
+            )}
+            {file.subjectCode && (
+              <div className="flex items-center justify-between">
+                <span className="text-blue-600 font-medium">Subject:</span>
+                <span className="text-blue-900">{file.subjectCode}</span>
+              </div>
+            )}
+            {file.version && (
+              <div className="flex items-center justify-between">
+                <span className="text-blue-600 font-medium">Version:</span>
+                <span className="text-blue-900">v{file.version}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* File Info - Enhanced with Quick Status */}
+        <div className="space-y-2 mb-3">
+          <div className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="text-gray-600 font-medium">Uploaded:</span>
+            <span className="font-semibold text-gray-900">{file.createdAt ? formatDate(file.createdAt) : 'N/A'}</span>
+          </div>
+
+          {/* Download Count - Quick Status */}
+          <div className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="text-gray-600 font-medium">📥 Downloads:</span>
+            <span className={`font-semibold ${(file.downloads || 0) > 0 ? 'text-blue-600' : 'text-gray-500'}`}>
+              {file.downloads || 0}
+            </span>
+          </div>
+
+          {/* Encryption Badge - Enhanced */}
+          <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg border border-green-200 font-medium">
+            <span>🔒</span>
+            <span>AES-256 Encrypted</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        {/* Show View button for review pages (HOS/Exam Unit), Download button for others */}
+        {onViewPDF && (userRole === 'hos' || userRole === 'exam_unit') ? (
+          <button
+            onClick={() => onViewPDF(file)}
+            className="w-full px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+          >
+            <Eye className="w-3 h-3" />
+            View PDF
+          </button>
+        ) : (
+          <button
+            onClick={handleView}
+            className="w-full px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+          >
+            <Download className="w-3 h-3" />
+            Download
+          </button>
+        )}
+
+        {/* DRAFT: Submit for Review. NEEDS_REVISION: Upload New Version (instead of Submit for Review) */}
+        {isOwner && workflowStatus === 'DRAFT' && (
+          <button
+            onClick={handleSubmitForReview}
+            disabled={submitting}
+            className="w-full mt-2 px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-1 disabled:bg-green-400"
+          >
+            <Send className="w-3 h-3" />
+            {submitting ? 'Submitting...' : 'Submit for Review'}
+          </button>
+        )}
+        {isOwner && workflowStatus === 'NEEDS_REVISION' && (
+          <button
+            onClick={() => setShowUploadVersion(true)}
+            className="w-full mt-2 px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-1"
+          >
+            <UploadCloud className="w-3 h-3" />
+            Upload New Version
+          </button>
+        )}
+      </div>
+
+      {/* Download History Modal */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">📥 Download History</h3>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4">
+              {historyLoading ? (
+                <p className="text-center text-gray-600">Loading...</p>
+              ) : downloadHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-600 font-medium">No downloads yet</p>
+                  <p className="text-sm text-gray-500 mt-1">Download history will appear here</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-gray-600">Email</th>
+                        <th className="px-4 py-2 text-left text-gray-600">Downloaded</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {downloadHistory.map((entry, idx) => (
+                        <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="px-4 py-2 text-gray-900">{entry.email || 'Anonymous'}</td>
+                          <td className="px-4 py-2 text-gray-600">
+                            {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'N/A'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Version History Modal */}
+      {showVersionHistory && (
+        <VersionHistoryModal
+          fileId={file.id}
+          currentVersion={file.version}
+          encryptionKey={file.encryptionKey}
+          onClose={() => setShowVersionHistory(false)}
+        />
+      )}
+
+      {/* Upload New Version Modal */}
+      {showUploadVersion && (
+        <UploadNewVersionModal
+          fileId={file.id}
+          currentVersion={file.version || 1}
+          onClose={() => setShowUploadVersion(false)}
+          onSuccess={() => {
+            if (onDeleted) onDeleted(); // Refresh file list
+          }}
+        />
+      )}
+
+      {/* File Timeline Modal */}
+      {showTimeline && (
+        <FileTimelineModal
+          file={file}
+          onClose={() => setShowTimeline(false)}
+        />
+      )}
+    </>
+  );
+}

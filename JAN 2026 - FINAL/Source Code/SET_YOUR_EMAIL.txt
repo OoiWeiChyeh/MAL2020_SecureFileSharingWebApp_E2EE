@@ -1,0 +1,8 @@
+Run this command (replace YOUR-EMAIL with the email you verified):
+
+npx firebase functions:config:set sendgrid.from_email="YOUR-EMAIL@gmail.com"
+npx firebase deploy --only functions
+
+Example:
+npx firebase functions:config:set sendgrid.from_email="john.doe@gmail.com"
+npx firebase deploy --only functions

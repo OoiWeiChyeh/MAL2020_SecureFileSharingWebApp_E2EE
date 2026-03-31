@@ -1,0 +1,22 @@
+{
+  "name": "users/SQsI9JstcRmKgYYvd25Iv8XPhpTL/mici21ofrfossirfm8s/DATABASE QUESTION PAPER.pdf.enc",
+  "bucket": "file-share-f8260.firebasestorage.app",
+  "metageneration": 1,
+  "generation": 1763949615205,
+  "contentType": "application/octet-stream",
+  "storageClass": "STANDARD",
+  "contentDisposition": "inline",
+  "downloadTokens": [
+    "43d60a93-2a2c-40a2-b8df-7ca88d122f0d"
+  ],
+  "etag": "OFvYst8DzdiecIMYlbvjDP2bKAk",
+  "customMetadata": {
+    "encrypted": "true",
+    "uploadedAt": "2025-11-24T02:00:14.849Z"
+  },
+  "timeCreated": "2025-11-24T02:00:15.205Z",
+  "updated": "2025-11-24T02:00:15.205Z",
+  "size": 14599,
+  "md5Hash": "Xq5IDG8TroBjBPNSELyo7g==",
+  "crc32c": "280566433"
+}

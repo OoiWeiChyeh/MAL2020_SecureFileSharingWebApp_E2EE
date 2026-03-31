@@ -1,0 +1,22 @@
+{
+  "name": "users/qEGDW3D1Zpk0BFARW75GzYbMwl7j/mi4qu3tvx9swortb3n/MAL_Assessment_DB (5).docx.enc",
+  "bucket": "file-share-f8260.firebasestorage.app",
+  "metageneration": 1,
+  "generation": 1763480631874,
+  "contentType": "application/octet-stream",
+  "storageClass": "STANDARD",
+  "contentDisposition": "inline",
+  "downloadTokens": [
+    "d61b4ece-6ff7-4556-b1d3-b1e8f70da88e"
+  ],
+  "etag": "WzHal/DXEzCDgYvaEV90Uj9GaNg",
+  "customMetadata": {
+    "encrypted": "true",
+    "uploadedAt": "2025-11-18T15:43:51.524Z"
+  },
+  "timeCreated": "2025-11-18T15:43:51.874Z",
+  "updated": "2025-11-18T15:43:51.874Z",
+  "size": 408707,
+  "md5Hash": "PBaa4C4hoN2cCXJrIH7eAg==",
+  "crc32c": "3930062501"
+}
