@@ -113,6 +113,9 @@ export const loginUser = async (email, password) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     return userCredential.user;
   } catch (error) {
+    if (error.code === 'auth/multi-factor-auth-required') {
+      throw error; // Let the UI handle the MFA challenge
+    }
     console.error('Error logging in:', error);
     throw handleAuthError(error);
   }
@@ -164,6 +167,9 @@ export const loginWithGoogle = async () => {
 
     return user;
   } catch (error) {
+    if (error.code === 'auth/multi-factor-auth-required') {
+      throw error; // Let the UI handle the MFA challenge
+    }
     console.error('Error logging in with Google:', error);
     throw handleAuthError(error);
   }

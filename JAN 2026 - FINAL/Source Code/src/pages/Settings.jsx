@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, logoutUser } from '../services/authService';
 import { getUserProfile, updateUserProfile } from '../services/firestoreService';
+import { multiFactor, TotpMultiFactorGenerator } from 'firebase/auth';
+import QRCode from 'qrcode';
 import Navbar from '../components/Navbar';
-import { User, Mail, Shield, LogOut, Trash2, AlertCircle, Bell, CheckCircle } from 'lucide-react';
+import { User, Mail, Shield, LogOut, Trash2, AlertCircle, Bell, CheckCircle, Smartphone, Check, X } from 'lucide-react';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -14,13 +16,18 @@ export default function Settings() {
   const [savingEmailPrefs, setSavingEmailPrefs] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
 
+  // 2FA State
+  const [mfaEnrolled, setMfaEnrolled] = useState(false);
+  const [mfaSetup, setMfaSetup] = useState({ active: false, qrCodeUrl: '', secret: null, verificationCode: '', error: '', loading: false });
+
   useEffect(() => {
     loadUserProfile();
+    checkMfaStatus();
   }, []);
 
   const loadUserProfile = async () => {
     if (!user) return;
-    
+
     try {
       const profile = await getUserProfile(user.uid);
       setUserProfile(profile);
@@ -30,9 +37,74 @@ export default function Settings() {
     }
   };
 
+  const checkMfaStatus = () => {
+    if (user && user.multiFactor) {
+      const enrolled = user.multiFactor.enrolledFactors?.some(f => f.factorId === 'totp') || false;
+      setMfaEnrolled(enrolled);
+    }
+  };
+
+  const startMfaSetup = async () => {
+    setMfaSetup(s => ({ ...s, active: true, loading: true, error: '' }));
+    try {
+      const session = await multiFactor(user).getSession();
+      const tSecret = await TotpMultiFactorGenerator.generateSecret(session);
+      const url = await QRCode.toDataURL(tSecret.generateQrCodeUrl(user.email, 'KUNCHEE'));
+      setMfaSetup({ active: true, qrCodeUrl: url, secret: tSecret, verificationCode: '', error: '', loading: false });
+    } catch (err) {
+      console.error('Error starting MFA setup:', err);
+      // Commonly fails if user hasn't authenticated recently
+      if (err.code === 'auth/requires-recent-login') {
+        alert('Please log out and log back in before enabling 2FA for security reasons.');
+      } else {
+        alert('Failed to start 2FA setup. ' + err.message);
+      }
+      setMfaSetup(s => ({ ...s, active: false, loading: false }));
+    }
+  };
+
+  const finalizeMfaSetup = async () => {
+    if (!mfaSetup.secret || mfaSetup.verificationCode.length !== 6) {
+      setMfaSetup(s => ({ ...s, error: 'Please enter a valid 6-digit code' }));
+      return;
+    }
+    setMfaSetup(s => ({ ...s, loading: true, error: '' }));
+    try {
+      const assertion = TotpMultiFactorGenerator.assertionForEnrollment(mfaSetup.secret, mfaSetup.verificationCode);
+      await multiFactor(user).enroll(assertion, 'Authenticator App');
+      setMfaEnrolled(true);
+      setMfaSetup({ active: false, qrCodeUrl: '', secret: null, verificationCode: '', error: '', loading: false });
+      alert('Two-factor authentication successfully enabled!');
+    } catch (err) {
+      console.error('Error finalizing MFA:', err);
+      setMfaSetup(s => ({ ...s, error: 'Invalid code. Please try again.', loading: false }));
+    }
+  };
+
+  const disableMfa = async () => {
+    if (!window.confirm('Are you sure you want to disable 2FA? This will reduce your account security.')) {
+      return;
+    }
+    try {
+      const factorUid = user.multiFactor.enrolledFactors.find(f => f.factorId === 'totp')?.uid;
+      if (factorUid) {
+        await multiFactor(user).unenroll(factorUid);
+        setMfaEnrolled(false);
+        alert('Two-factor authentication has been disabled.');
+      }
+    } catch (err) {
+      console.error('Error disabling MFA:', err);
+      if (err.code === 'auth/requires-recent-login') {
+        alert('Please log out and log back in before disabling 2FA.');
+      } else {
+        alert('Failed to disable 2FA. ' + err.message);
+      }
+    }
+  };
+
   const handleToggleEmailNotifications = async () => {
     if (!user) return;
-    
+
     setSavingEmailPrefs(true);
     try {
       const newValue = !emailNotificationsEnabled;
@@ -87,7 +159,7 @@ export default function Settings() {
         {/* Profile Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Profile Information</h2>
-          
+
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
@@ -142,18 +214,16 @@ export default function Settings() {
                 <button
                   onClick={handleToggleEmailNotifications}
                   disabled={savingEmailPrefs}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                    emailNotificationsEnabled ? 'bg-blue-600' : 'bg-gray-300'
-                  } ${savingEmailPrefs ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${emailNotificationsEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                    } ${savingEmailPrefs ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      emailNotificationsEnabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${emailNotificationsEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
                   />
                 </button>
               </div>
-              
+
               {emailNotificationsEnabled && (
                 <div className="mt-3 pt-3 border-t border-blue-200">
                   <p className="text-xs text-blue-700 flex items-center gap-2">
@@ -205,6 +275,111 @@ export default function Settings() {
                 Share files via encrypted links or QR codes. Recipients decrypt files locally in their browser.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Two-Factor Authentication Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+            <Smartphone className="w-6 h-6 text-blue-600" />
+            Two-Factor Authentication (2FA)
+          </h2>
+
+          <div className="space-y-4">
+            {!mfaEnrolled && !mfaSetup.active && (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-gray-900 mb-1">Authenticator App</h3>
+                  <p className="text-sm text-gray-600">
+                    Add an extra layer of security to your account using an authenticator app.
+                  </p>
+                </div>
+                <button
+                  onClick={startMfaSetup}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap text-sm font-medium"
+                >
+                  Enable 2FA
+                </button>
+              </div>
+            )}
+
+            {mfaEnrolled && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-green-900 mb-1 flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5" />
+                    2FA is Enabled
+                  </h3>
+                  <p className="text-sm text-green-800">
+                    Your account is protected with an authenticator app.
+                  </p>
+                </div>
+                <button
+                  onClick={disableMfa}
+                  className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors whitespace-nowrap text-sm font-medium"
+                >
+                  Disable 2FA
+                </button>
+              </div>
+            )}
+
+            {mfaSetup.active && (
+              <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-medium text-blue-900 text-lg">Set up Authenticator App</h3>
+                  <button onClick={() => setMfaSetup({ active: false, qrCodeUrl: '', secret: null, verificationCode: '', error: '', loading: false })} className="text-gray-500 hover:text-gray-700">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-sm text-blue-800">
+                    1. Scan this QR code with your authenticator app (like Google or Microsoft Authenticator).
+                  </p>
+
+                  {mfaSetup.loading ? (
+                    <div className="flex justify-center p-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : (
+                    mfaSetup.qrCodeUrl && (
+                      <div className="flex justify-center bg-white p-4 rounded-lg mx-auto border border-gray-200" style={{ width: 'fit-content' }}>
+                        <img src={mfaSetup.qrCodeUrl} alt="QR Code" className="w-48 h-48" />
+                      </div>
+                    )
+                  )}
+
+                  <p className="text-sm text-blue-800 pt-2">
+                    2. Enter the 6-digit code generated by the app.
+                  </p>
+
+                  <div className="flex space-x-3">
+                    <input
+                      type="text"
+                      maxLength="6"
+                      value={mfaSetup.verificationCode}
+                      onChange={(e) => setMfaSetup({ ...mfaSetup, verificationCode: e.target.value.replace(/\D/g, '') })}
+                      placeholder="000000"
+                      className="flex-1 px-4 py-2 border border-blue-300 bg-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center tracking-widest text-lg font-mono outline-none"
+                    />
+                    <button
+                      onClick={finalizeMfaSetup}
+                      disabled={mfaSetup.verificationCode.length !== 6 || mfaSetup.loading}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 font-medium"
+                    >
+                      {mfaSetup.loading ? 'Verifying...' : 'Verify'}
+                    </button>
+                  </div>
+
+                  {mfaSetup.error && (
+                    <p className="text-sm text-red-600 flex items-center gap-1 mt-2">
+                      <AlertCircle className="w-4 h-4" />
+                      {mfaSetup.error}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
